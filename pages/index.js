@@ -37,6 +37,7 @@ import { parseExcelFile } from "@/utils/excelParser";
 // Formatters
 // ========================
 const phpM = (n, dp = 2) => `₱${(n / 1_000_000).toFixed(dp)}M`;
+const volM = (n, dp = 2) => `${(n / 1000000).toFixed(dp)}M`;
 const volH = (n, dp = 2) => `${(n / 100).toFixed(dp)}H`;
 const int = (n) => new Intl.NumberFormat("en-US").format(Math.round(n));
 
@@ -399,11 +400,19 @@ export default function Home() {
 
   // Monthly for YTD/MTD/Forecast comparisons
   const monthlyTY = useMemo(
-    () => aggregate(adjustedTY, "Monthly"),
+    () => {
+      const result = aggregate(adjustedTY, "Monthly");
+      console.log('Monthly TY data:', result.map(m => ({ month: m.month, monthName: m.monthName, revenue: m.revenue })));
+      return result;
+    },
     [adjustedTY]
   );
   const monthlyLY = useMemo(
-    () => aggregate(baseLY.weekly, "Monthly"),
+    () => {
+      const result = aggregate(baseLY.weekly, "Monthly");
+      console.log('Monthly LY data:', result.map(m => ({ month: m.month, monthName: m.monthName, revenue: m.revenue })));
+      return result;
+    },
     [baseLY]
   );
 
@@ -519,7 +528,7 @@ export default function Home() {
           <h1 className="text-2xl font-bold">Sales Pipeline Scenario Lab</h1>
           <p className="text-sm text-gray-500">
             LY vs TY, YTD/MTD, and outlook. Revenue in Millions PHP, Volume
-            normalized to hundreds.
+            normalized to millions.
           </p>
           {isUsingUploadedData && uploadedData && (
             <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
@@ -843,7 +852,7 @@ export default function Home() {
         />
         <KPICard
           title="Overall Pipeline Volume"
-          value={volH(overallVolume, 1)}
+          value={volM(overallVolume, 1)}
           subtitle={period}
         />
         <KPICard
@@ -853,7 +862,7 @@ export default function Home() {
         />
         <KPICard
           title="Average Monthly Volume"
-          value={volH(avgMonthlyVolume, 1)}
+          value={volM(avgMonthlyVolume, 1)}
           subtitle="Across 12 months"
         />
       </div>
@@ -886,7 +895,7 @@ export default function Home() {
       </Section>
 
       {/* Volume Trajectory */}
-      <Section title="Volume Trajectory (Hundreds)">
+      <Section title="Volume Trajectory (Millions)">
         <Card className="rounded-2xl">
           <CardContent className="p-4 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -895,8 +904,8 @@ export default function Home() {
                 {period === "Weekly" && <XAxis dataKey="week" />}
                 {period === "Monthly" && <XAxis dataKey="monthName" />}
                 {period === "Yearly" && <XAxis dataKey="year" />}
-                <YAxis tickFormatter={(v) => volH(v, 1)} />
-                <Tooltip formatter={(v) => volH(v, 2)} />
+                <YAxis tickFormatter={(v) => volM(v, 1)} />
+                <Tooltip formatter={(v) => volM(v, 2)} />
                 <Legend />
                 <Area
                   type="monotone"
@@ -923,12 +932,17 @@ export default function Home() {
           <CardContent className="p-4 h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={Array.from({ length: 12 }, (_, i) => ({
-                  month: i + 1,
-                  monthName: getMonthName(i + 1),
-                  ly: monthlyLY[i]?.revenue || 0,
-                  ty: monthlyTY[i]?.revenue || 0,
-                }))}
+                data={Array.from({ length: 12 }, (_, i) => {
+                  const monthNum = i + 1;
+                  const tyData = monthlyTY.find(m => m.month === monthNum);
+                  const lyData = monthlyLY.find(m => m.month === monthNum);
+                  return {
+                    month: monthNum,
+                    monthName: getMonthName(monthNum),
+                    ly: lyData?.revenue || 0,
+                    ty: tyData?.revenue || 0,
+                  };
+                })}
               >
                 {showGrid && <CartesianGrid strokeDasharray="3 3" />}
                 <XAxis dataKey="monthName" />
