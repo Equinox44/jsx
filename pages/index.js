@@ -62,6 +62,8 @@ function generateSample(seed = 42, year = 2025) {
     "Healthcare",
     "Logistics",
   ];
+  const salesCategories = ["New", "Cross-Sell", "Upsell", "Renewal"];
+  const cities = ["Manila", "Cebu", "Davao", "Quezon City", "Makati", "Pasig", "Taguig"];
   const areas = ["NCR", "North Luzon", "South Luzon", "Visayas", "Mindanao"];
   const agents = [
     "Alonzo",
@@ -74,15 +76,26 @@ function generateSample(seed = 42, year = 2025) {
     "Hernandez",
   ];
   const statuses = ["Prospect", "Negotiation", "Won", "Lost", "On Hold"];
+  const territoryCodes = ["T01", "T02", "T03", "T04", "T05", "T06", "T07", "T08"];
 
   const accounts = Array.from({ length: 80 }).map((_, idx) => {
     const industry = industries[Math.floor(rnd() * industries.length)];
+    const salesCategory = salesCategories[Math.floor(rnd() * salesCategories.length)];
+    const city = cities[Math.floor(rnd() * cities.length)];
     const area = areas[Math.floor(rnd() * areas.length)];
+    const territoryCode = territoryCodes[Math.floor(rnd() * territoryCodes.length)];
     const agent = agents[Math.floor(rnd() * agents.length)];
     const status = statuses[Math.floor(rnd() * statuses.length)];
     const name = `${industry.substring(0, 3).toUpperCase()}-${area
       .substring(0, 2)
       .toUpperCase()}-ACCT-${String(idx + 1).padStart(3, "0")}`;
+    
+    // Random start month and year for forecasting
+    const startMonth = Math.floor(rnd() * 12) + 1; // 1-12
+    const startYear = year + Math.floor(rnd() * 2); // This year or next year
+    const yearsOfEngagement = Math.floor(rnd() * 3) + 1; // 1-3 years
+    const endYear = startYear + yearsOfEngagement - 1;
+    
     const industryW = 0.8 + industries.indexOf(industry) * 0.08;
     const areaW = 0.9 + areas.indexOf(area) * 0.05;
     const baseRev = 400000 + rnd() * 3000000 * industryW * areaW;
@@ -91,34 +104,61 @@ function generateSample(seed = 42, year = 2025) {
       id: idx + 1,
       name,
       industry,
+      salesCategory,
+      city,
       area,
+      territoryCode,
       agent,
       status,
       baseRev,
       baseVol,
+      startMonth,
+      startYear,
+      yearsOfEngagement,
+      endYear,
     };
   });
 
   const weekly = [];
   for (let w = 1; w <= 52; w++) {
     accounts.forEach((acc, i) => {
-      const season = 1 + 0.12 * Math.sin((2 * Math.PI * (w + i)) / 52);
-      const rev =
-        (acc.baseRev / 4.345) *
-        (0.6 + rnd() * 0.8) *
-        season *
-        (year === 2025 ? 1.06 : 1.0);
-      const vol = (acc.baseVol / 4.345) * (0.6 + rnd() * 0.8) * season;
+      // Calculate which month this week corresponds to
+      const weekMonth = Math.ceil(w / 4.345);
+      const currentYear = year;
+      
+      // Check if this account should be contributing revenue/volume at this time
+      const shouldContribute = (
+        (currentYear > acc.startYear) ||
+        (currentYear === acc.startYear && weekMonth >= acc.startMonth)
+      ) && (currentYear <= acc.endYear);
+      
+      // Only generate revenue/volume if account should be contributing
+      let rev = 0;
+      let vol = 0;
+      
+      if (shouldContribute) {
+        const season = 1 + 0.12 * Math.sin((2 * Math.PI * (w + i)) / 52);
+        rev = (acc.baseRev / 4.345) * (0.6 + rnd() * 0.8) * season * (year === 2025 ? 1.06 : 1.0);
+        vol = (acc.baseVol / 4.345) * (0.6 + rnd() * 0.8) * season;
+      }
+      
       weekly.push({
         week: w,
         year,
         account: acc.name,
         industry: acc.industry,
+        salesCategory: acc.salesCategory,
+        city: acc.city,
         area: acc.area,
+        territoryCode: acc.territoryCode,
         agent: acc.agent,
         status: acc.status,
         revenue: rev,
         volume: vol,
+        startMonth: acc.startMonth,
+        startYear: acc.startYear,
+        yearsOfEngagement: acc.yearsOfEngagement,
+        endYear: acc.endYear,
       });
     });
   }
@@ -126,7 +166,7 @@ function generateSample(seed = 42, year = 2025) {
   return {
     weekly,
     accounts,
-    meta: { industries, areas, agents, statuses, year },
+    meta: { industries, salesCategories, cities, areas, territoryCodes, agents, statuses, year },
   };
 }
 
@@ -135,6 +175,15 @@ function generateSample(seed = 42, year = 2025) {
 // ========================
 function weeklyToMonth(week) {
   return Math.min(12, Math.max(1, Math.ceil(week / 4.345)));
+}
+
+// Convert month number to month name
+function getMonthName(monthNum) {
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  return months[monthNum - 1] || 'Unknown';
 }
 
 function aggregate(data, period = "Weekly") {
@@ -152,7 +201,12 @@ function aggregate(data, period = "Weekly") {
     const by = {};
     for (const d of data) {
       const k = weeklyToMonth(d.week);
-      if (!by[k]) by[k] = { month: k, revenue: 0, volume: 0 };
+      if (!by[k]) by[k] = { 
+        month: k, 
+        monthName: getMonthName(k),
+        revenue: 0, 
+        volume: 0 
+      };
       by[k].revenue += d.revenue;
       by[k].volume += d.volume;
     }
@@ -263,6 +317,17 @@ export default function Home() {
   const [uploadError, setUploadError] = useState(null);
   const [isUsingUploadedData, setIsUsingUploadedData] = useState(false);
 
+  // Filter states
+  const [filters, setFilters] = useState({
+    industry: 'all',
+    salesCategory: 'all',
+    status: 'all', // sales stage
+    city: 'all',
+    territoryCode: 'all',
+    agent: 'all',
+    area: 'all' // Use area instead of teamDesignation
+  });
+
   // Base datasets - use uploaded data if available, otherwise generate sample data
   const baseTY = useMemo(() => {
     if (isUsingUploadedData && uploadedData) {
@@ -274,17 +339,31 @@ export default function Home() {
   const baseLY = useMemo(() => generateSample(seed ^ 1337, lastYear), [seed]);
   const industries = baseTY.meta.industries;
 
-  // Apply scenario to TY
-  const adjustedTY = useMemo(
-    () =>
-      applyScenario(baseTY.weekly, {
-        revenueMultiplier,
-        volumeMultiplier,
-        mixShiftIndustry,
-        mixShiftPct,
-      }),
-    [baseTY, revenueMultiplier, volumeMultiplier, mixShiftIndustry, mixShiftPct]
-  );
+  // Apply filters to data
+  const applyFilters = (data) => {
+    return data.filter(item => {
+      return (
+        (filters.industry === 'all' || item.industry === filters.industry) &&
+        (filters.salesCategory === 'all' || item.salesCategory === filters.salesCategory) &&
+        (filters.status === 'all' || item.status === filters.status) &&
+        (filters.city === 'all' || item.city === filters.city) &&
+        (filters.territoryCode === 'all' || item.territoryCode === filters.territoryCode) &&
+        (filters.agent === 'all' || item.agent === filters.agent) &&
+        (filters.area === 'all' || item.area === filters.area) // Use area instead of teamDesignation
+      );
+    });
+  };
+
+  // Apply scenario to TY with filters
+  const adjustedTY = useMemo(() => {
+    const scenarioData = applyScenario(baseTY.weekly, {
+      revenueMultiplier,
+      volumeMultiplier,
+      mixShiftIndustry,
+      mixShiftPct,
+    });
+    return applyFilters(scenarioData);
+  }, [baseTY, revenueMultiplier, volumeMultiplier, mixShiftIndustry, mixShiftPct, filters]);
 
   // Aggregations for dashboards
   const seriesTY = useMemo(
@@ -367,22 +446,36 @@ export default function Home() {
         "year",
         "account",
         "industry",
+        "salesCategory",
+        "city",
         "area",
+        "territoryCode",
         "agent",
         "status",
         "revenue",
         "volume",
+        "startMonth",
+        "startYear",
+        "yearsOfEngagement",
+        "endYear",
       ],
       ...adjustedTY.map((d) => [
         d.week,
         d.year,
         d.account,
         d.industry,
+        d.salesCategory || '',
+        d.city || '',
         d.area,
+        d.territoryCode || '',
         d.agent,
         d.status,
         Math.round(d.revenue),
         Math.round(d.volume),
+        d.startMonth || '',
+        d.startYear || '',
+        d.yearsOfEngagement || '',
+        d.endYear || '',
       ]),
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
@@ -406,6 +499,15 @@ export default function Home() {
       setVolumeMultiplier(1.0);
       setMixShiftIndustry(null);
       setMixShiftPct(10);
+      // Reset filters when new data is uploaded
+      setFilters({
+        industry: 'all',
+        salesCategory: 'all',
+        status: 'all',
+        city: 'all',
+        territoryCode: 'all',
+        agent: 'all'
+      });
     } catch (error) {
       setUploadError(error.message);
       setIsUsingUploadedData(false);
@@ -422,6 +524,14 @@ export default function Home() {
     setMixShiftPct(10);
     setMonthCutoff(new Date().getMonth() + 1);
     setForecastAdjPct(0);
+    setFilters({
+      industry: 'all',
+      salesCategory: 'all',
+      status: 'all',
+      city: 'all',
+      territoryCode: 'all',
+      agent: 'all'
+    });
   };
 
   return (
@@ -583,6 +693,177 @@ export default function Home() {
         </CardContent>
       </Card>
 
+      {/* Data Filters */}
+      <Card className="rounded-2xl">
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            <h3 className="text-md font-semibold">Data Filters</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div>
+                <Label className="text-xs">Industry</Label>
+                <Select
+                  value={filters.industry}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, industry: v }))}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Industries</SelectItem>
+                    {baseTY.meta.industries.map((industry) => (
+                      <SelectItem key={industry} value={industry}>
+                        {industry}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Sales Category</Label>
+                <Select
+                  value={filters.salesCategory}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, salesCategory: v }))}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {baseTY.meta.salesCategories?.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Sales Stage</Label>
+                <Select
+                  value={filters.status}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, status: v }))}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stages</SelectItem>
+                    {baseTY.meta.statuses.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">City</Label>
+                <Select
+                  value={filters.city}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, city: v }))}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Cities</SelectItem>
+                    {baseTY.meta.cities?.map((city) => (
+                      <SelectItem key={city} value={city}>
+                        {city}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Territory Code</Label>
+                <Select
+                  value={filters.territoryCode}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, territoryCode: v }))}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Territories</SelectItem>
+                    {baseTY.meta.territoryCodes?.map((code) => (
+                      <SelectItem key={code} value={code}>
+                        {code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Sales Agent</Label>
+                <Select
+                  value={filters.agent}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, agent: v }))}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Agents</SelectItem>
+                    {baseTY.meta.agents.map((agent) => (
+                      <SelectItem key={agent} value={agent}>
+                        {agent}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Team Designation</Label>
+                <Select
+                  value={filters.area}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, area: v }))}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Teams</SelectItem>
+                    {baseTY.meta.areas?.map((team) => (
+                      <SelectItem key={team} value={team}>
+                        {team}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between pt-3 border-t">
+              <div className="text-xs text-gray-500">
+                Showing {adjustedTY.length} records after filters applied
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFilters({
+                  industry: 'all',
+                  salesCategory: 'all',
+                  status: 'all',
+                  city: 'all',
+                  territoryCode: 'all',
+                  agent: 'all',
+                  area: 'all'
+                })}
+              >
+                Clear All Filters
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
@@ -615,7 +896,7 @@ export default function Home() {
               <AreaChart data={seriesTY}>
                 {showGrid && <CartesianGrid strokeDasharray="3 3" />}
                 {period === "Weekly" && <XAxis dataKey="week" />}
-                {period === "Monthly" && <XAxis dataKey="month" />}
+                {period === "Monthly" && <XAxis dataKey="monthName" />}
                 {period === "Yearly" && <XAxis dataKey="year" />}
                 <YAxis tickFormatter={(v) => phpM(v, 1)} />
                 <Tooltip formatter={(v) => phpM(v, 2)} />
@@ -642,7 +923,7 @@ export default function Home() {
               <AreaChart data={seriesTY}>
                 {showGrid && <CartesianGrid strokeDasharray="3 3" />}
                 {period === "Weekly" && <XAxis dataKey="week" />}
-                {period === "Monthly" && <XAxis dataKey="month" />}
+                {period === "Monthly" && <XAxis dataKey="monthName" />}
                 {period === "Yearly" && <XAxis dataKey="year" />}
                 <YAxis tickFormatter={(v) => volH(v, 1)} />
                 <Tooltip formatter={(v) => volH(v, 2)} />
@@ -674,12 +955,13 @@ export default function Home() {
               <LineChart
                 data={Array.from({ length: 12 }, (_, i) => ({
                   month: i + 1,
+                  monthName: getMonthName(i + 1),
                   ly: monthlyLY[i]?.revenue || 0,
                   ty: monthlyTY[i]?.revenue || 0,
                 }))}
               >
                 {showGrid && <CartesianGrid strokeDasharray="3 3" />}
-                <XAxis dataKey="month" />
+                <XAxis dataKey="monthName" />
                 <YAxis tickFormatter={(v) => phpM(v, 1)} />
                 <Tooltip formatter={(v) => phpM(v, 2)} />
                 <Legend />
