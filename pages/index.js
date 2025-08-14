@@ -341,8 +341,14 @@ export default function Home() {
 
   // Apply filters to data
   const applyFilters = (data) => {
-    return data.filter(item => {
-      return (
+    console.log('applyFilters called with:', {
+      dataLength: data?.length,
+      currentFilters: filters,
+      sampleData: data?.slice(0, 3)
+    });
+    
+    const filtered = data.filter(item => {
+      const passes = (
         (filters.industry === 'all' || item.industry === filters.industry) &&
         (filters.salesCategory === 'all' || item.salesCategory === filters.salesCategory) &&
         (filters.status === 'all' || item.status === filters.status) &&
@@ -351,7 +357,17 @@ export default function Home() {
         (filters.agent === 'all' || item.agent === filters.agent) &&
         (filters.area === 'all' || item.area === filters.area) // Use area instead of teamDesignation
       );
+      
+      return passes;
     });
+    
+    console.log('applyFilters result:', {
+      originalLength: data?.length,
+      filteredLength: filtered?.length,
+      sampleFiltered: filtered?.slice(0, 3)
+    });
+    
+    return filtered;
   };
 
   // Apply scenario to TY with filters
@@ -492,6 +508,12 @@ export default function Home() {
     setUploadError(null);
     try {
       const parsedData = await parseExcelFile(file);
+      console.log('Upload handler received data:', {
+        weeklyCount: parsedData.weekly?.length,
+        accountsCount: parsedData.accounts?.length,
+        sampleWeekly: parsedData.weekly?.slice(0, 3),
+        meta: parsedData.meta
+      });
       setUploadedData(parsedData);
       setIsUsingUploadedData(true);
       // Reset scenario settings when new data is uploaded
@@ -499,14 +521,15 @@ export default function Home() {
       setVolumeMultiplier(1.0);
       setMixShiftIndustry(null);
       setMixShiftPct(10);
-      // Reset filters when new data is uploaded
+      // Reset filters when new data is uploaded - include area filter
       setFilters({
         industry: 'all',
         salesCategory: 'all',
         status: 'all',
         city: 'all',
         territoryCode: 'all',
-        agent: 'all'
+        agent: 'all',
+        area: 'all'
       });
     } catch (error) {
       setUploadError(error.message);
