@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { FileUpload } from "@/components/ui/file-upload";
 import {
   BarChart,
   Bar,
@@ -29,7 +30,8 @@ import {
   CartesianGrid,
 } from "recharts";
 import { motion } from "framer-motion";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, FileSpreadsheet, AlertCircle } from "lucide-react";
+import { parseExcelFile, downloadSampleExcel } from "@/utils/excelParser";
 
 // ========================
 // Formatters
@@ -256,8 +258,19 @@ export default function Home() {
   const [monthCutoff, setMonthCutoff] = useState(new Date().getMonth() + 1);
   const [forecastAdjPct, setForecastAdjPct] = useState(0);
 
-  // Base datasets
-  const baseTY = useMemo(() => generateSample(seed, thisYear), [seed]);
+  // Data management
+  const [uploadedData, setUploadedData] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const [isUsingUploadedData, setIsUsingUploadedData] = useState(false);
+
+  // Base datasets - use uploaded data if available, otherwise generate sample data
+  const baseTY = useMemo(() => {
+    if (isUsingUploadedData && uploadedData) {
+      return uploadedData;
+    }
+    return generateSample(seed, thisYear);
+  }, [seed, uploadedData, isUsingUploadedData]);
+  
   const baseLY = useMemo(() => generateSample(seed ^ 1337, lastYear), [seed]);
   const industries = baseTY.meta.industries;
 
@@ -382,6 +395,40 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const handleFileUpload = async (file) => {
+    setUploadError(null);
+    try {
+      const parsedData = await parseExcelFile(file);
+      setUploadedData(parsedData);
+      setIsUsingUploadedData(true);
+      // Reset scenario settings when new data is uploaded
+      setRevenueMultiplier(1.0);
+      setVolumeMultiplier(1.0);
+      setMixShiftIndustry(null);
+      setMixShiftPct(10);
+    } catch (error) {
+      setUploadError(error.message);
+      setIsUsingUploadedData(false);
+    }
+  };
+
+  const downloadSample = () => {
+    const sampleData = generateSample(42, thisYear).weekly;
+    downloadSampleExcel(sampleData);
+  };
+
+  const resetToSampleData = () => {
+    setIsUsingUploadedData(false);
+    setUploadedData(null);
+    setUploadError(null);
+    setRevenueMultiplier(1);
+    setVolumeMultiplier(1);
+    setMixShiftIndustry(null);
+    setMixShiftPct(10);
+    setMonthCutoff(new Date().getMonth() + 1);
+    setForecastAdjPct(0);
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <motion.div
@@ -395,22 +442,32 @@ export default function Home() {
             LY vs TY, YTD/MTD, and outlook. Revenue in Millions PHP, Volume
             normalized to hundreds.
           </p>
+          {isUsingUploadedData && uploadedData && (
+            <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+              <FileSpreadsheet className="w-3 h-3" />
+              Using uploaded data ({uploadedData.info?.totalRows} rows)
+            </div>
+          )}
+          {uploadError && (
+            <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
+              <AlertCircle className="w-3 h-3" />
+              {uploadError}
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Label className="text-xs">Grid</Label>
             <Switch checked={showGrid} onCheckedChange={setShowGrid} />
           </div>
+          <Button variant="outline" onClick={downloadSample}>
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Sample Excel
+          </Button>
+          <FileUpload onFileSelect={handleFileUpload} />
           <Button
             variant="outline"
-            onClick={() => {
-              setRevenueMultiplier(1);
-              setVolumeMultiplier(1);
-              setMixShiftIndustry(null);
-              setMixShiftPct(10);
-              setMonthCutoff(new Date().getMonth() + 1);
-              setForecastAdjPct(0);
-            }}
+            onClick={resetToSampleData}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Reset
