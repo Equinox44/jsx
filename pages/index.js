@@ -30,7 +30,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { motion } from "framer-motion";
-import { Download, RefreshCw, FileSpreadsheet, AlertCircle } from "lucide-react";
+import { RefreshCw, FileSpreadsheet, AlertCircle } from "lucide-react";
 import { parseExcelFile } from "@/utils/excelParser";
 
 // ========================
@@ -455,55 +455,6 @@ export default function Home() {
     ? avgMonthly.reduce((s, d) => s + d.volume, 0) / avgMonthly.length
     : 0;
 
-  const exportCSV = () => {
-    const rows = [
-      [
-        "week",
-        "year",
-        "account",
-        "industry",
-        "salesCategory",
-        "city",
-        "area",
-        "territoryCode",
-        "agent",
-        "status",
-        "revenue",
-        "volume",
-        "startMonth",
-        "startYear",
-        "yearsOfEngagement",
-        "endYear",
-      ],
-      ...adjustedTY.map((d) => [
-        d.week,
-        d.year,
-        d.account,
-        d.industry,
-        d.salesCategory || '',
-        d.city || '',
-        d.area,
-        d.territoryCode || '',
-        d.agent,
-        d.status,
-        Math.round(d.revenue),
-        Math.round(d.volume),
-        d.startMonth || '',
-        d.startYear || '',
-        d.yearsOfEngagement || '',
-        d.endYear || '',
-      ]),
-    ];
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "pipeline_scenario_data.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const handleFileUpload = async (file) => {
     setUploadError(null);
     try {
@@ -595,10 +546,6 @@ export default function Home() {
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Reset
-          </Button>
-          <Button onClick={exportCSV}>
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
           </Button>
         </div>
       </motion.div>
