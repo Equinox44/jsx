@@ -31,7 +31,7 @@ import {
 } from "recharts";
 import { motion } from "framer-motion";
 import { Download, RefreshCw, FileSpreadsheet, AlertCircle } from "lucide-react";
-import { parseExcelFile, downloadSampleExcel } from "@/utils/excelParser";
+import { parseExcelFile } from "@/utils/excelParser";
 
 // ========================
 // Formatters
@@ -412,11 +412,6 @@ export default function Home() {
     }
   };
 
-  const downloadSample = () => {
-    const sampleData = generateSample(42, thisYear).weekly;
-    downloadSampleExcel(sampleData);
-  };
-
   const resetToSampleData = () => {
     setIsUsingUploadedData(false);
     setUploadedData(null);
@@ -460,10 +455,6 @@ export default function Home() {
             <Label className="text-xs">Grid</Label>
             <Switch checked={showGrid} onCheckedChange={setShowGrid} />
           </div>
-          <Button variant="outline" onClick={downloadSample}>
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            Sample Excel
-          </Button>
           <FileUpload onFileSelect={handleFileUpload} />
           <Button
             variant="outline"

@@ -191,34 +191,3 @@ export const parseExcelFile = (file) => {
     reader.readAsArrayBuffer(file);
   });
 };
-
-export const downloadSampleExcel = (sampleData) => {
-  // Create sample data with the user's Excel format
-  const sampleRows = sampleData.slice(0, 20).map((row, index) => ({
-    'Account Name': row.account,
-    'Industry': row.industry,
-    'Existing Account': 'YES',
-    'Sales Category': 'New',
-    'Sales Stage': row.status,
-    'Area': row.area,
-    'Expected/Forecasted TXN Start': 'August',
-    'Year of Engagement': row.year,
-    'Committed Monthly Vol': Math.round(row.volume),
-    'Committed FY Vol': Math.round(row.volume * 12),
-    'Monthly Sales Report Prep': Math.round(row.revenue),
-    'Territory Code': `T${String(index + 1).padStart(2, '0')}`,
-    'Sales Rep': row.agent,
-    'Sales Remarks / Contact History': 'Sample data entry'
-  }));
-  
-  const worksheet = XLSX.utils.json_to_sheet(sampleRows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Sales Pipeline Data');
-  
-  // Auto-size columns
-  const colWidths = Object.keys(sampleRows[0]).map(() => ({ wch: 20 }));
-  worksheet['!cols'] = colWidths;
-  
-  // Generate Excel file
-  XLSX.writeFile(workbook, 'sample_sales_pipeline_template.xlsx');
-};
